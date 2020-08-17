@@ -1,0 +1,144 @@
+NAME
+
+    Device::BusPirate - interact with a Bus Pirate device
+
+DESCRIPTION
+
+    This module allows a program to interact with a Bus Pirate hardware
+    electronics debugging device, attached over a USB-emulated serial port.
+    In the following description, the reader is assumed to be generally
+    aware of the device and its capabilities. For more information about
+    the Bus Pirate see:
+
+      http://dangerousprototypes.com/docs/Bus_Pirate
+
+    This module and its various component modules are based on Future,
+    allowing either synchronous or asynchronous communication with the
+    attached hardware device.
+
+    To use it synchronously, call the get method of any returned Future
+    instances to obtain the eventual result:
+
+       my $spi = $pirate->enter_mode( "SPI" )->get;
+    
+       $spi->power( 1 )->get;
+       my $input = $spi->writeread_cs( $output )->get;
+
+    A truely-asynchronous program would use the futures more
+    conventionally, perhaps by using ->then chaining:
+
+       my $input = $pirate->enter_mode( "SPI" )
+         ->then( sub {
+            my ( $spi ) = @_;
+    
+            $spi->power( 1 )->then( sub {
+               $spi->writeread_cs( $output );
+            });
+         });
+
+    This module uses Future::IO for its underlying IO operations, so using
+    it in a program would require the event system to integrate with
+    Future::IO appropriately.
+
+CONSTRUCTOR
+
+ new
+
+       $pirate = Device::BusPirate->new( %args )
+
+    Returns a new Device::BusPirate instance to communicate with the given
+    device. Takes the following named arguments:
+
+    serial => STRING
+
+      Path to the serial port device node the Bus Pirate is attached to. If
+      not supplied, the BUS_PIRATE environment variable is used; falling
+      back on a default of /dev/ttyUSB0.
+
+    baud => INT
+
+      Serial baud rate to communicate at. Normally it should not be
+      necessary to change this from its default of 115200.
+
+METHODS
+
+    The following methods documented with a trailing call to ->get return
+    Future instances.
+
+ sleep
+
+       $pirate->sleep( $timeout )->get
+
+    Returns a Future that will become ready after the given timeout (in
+    seconds), unless it is cancelled first.
+
+ enter_mutex
+
+       @result = $pirate->enter_mutex( $code )->get
+
+    Acts as a mutex lock, to ensure only one block of code runs at once.
+    Calls to enter_mutex will be queued up; each $code block will only be
+    invoked once the Future returned from the previous has completed.
+
+    Mode implementations should use this method to guard complete
+    wire-level transactions, ensuring that multiple concurrent ones will
+    not collide with each other.
+
+ enter_mode
+
+       $mode = $pirate->enter_mode( $modename )->get
+
+    Switches the attached device into the given mode, and returns an object
+    to represent that hardware mode to interact with. This will be an
+    instance of a class depending on the given mode name.
+
+    BB
+
+      The bit-banging mode. Returns an instance of
+      Device::BusPirate::Mode::BB.
+
+    I2C
+
+      The I2C mode. Returns an instance of Device::BusPirate::Mode::I2C.
+
+    SPI
+
+      The SPI mode. Returns an instance of Device::BusPirate::Mode::SPI.
+
+    UART
+
+      The UART mode. Returns an instance of Device::BusPirate::Mode::UART.
+
+    Once a mode object has been created, most of the interaction with the
+    device would be done using that mode object, as it will have methods
+    relating to the specifics of that hardware mode. See the classes listed
+    above for more information.
+
+ start
+
+       $pirate->start->get
+
+    Starts binary IO mode on the Bus Pirate device, enabling the module to
+    actually communicate with it. Normally it is not necessary to call this
+    method explicitly as it will be done by the setup code of the mode
+    object.
+
+ stop
+
+       $pirate->stop
+
+    Stops binary IO mode on the Bus Pirate device and returns it to user
+    terminal mode. It may be polite to perform this at the end of a program
+    to return it to a mode that a user can interact with normally on a
+    terminal.
+
+TODO
+
+      * More modes - 1-wire, raw-wire
+
+      * AUX frequency measurement and ADC support.
+
+AUTHOR
+
+    Paul Evans <leonerd@leonerd.org.uk>
+
